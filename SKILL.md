@@ -31,6 +31,7 @@ These are the things where deviation produces silent failures or broken output. 
 10. **Parallel sub-agents for multiple animations.** Never sequential. Spawn N at once via the `Agent` tool; total wall time ≈ slowest one.
 11. **Strategy confirmation before execution.** Never touch the cut until the user has approved the plain-English plan.
 12. **All session outputs in `<videos_dir>/edit/`.** Never write inside the `video-use/` project directory.
+13. **720p proof before 4K final when review is expected.** For long-form edits and Shorts packages, use review proofs for feedback cycles and render final delivery files only after the proof is approved.
 
 Everything else in this document is a worked example. Deviate whenever the material calls for it.
 
@@ -98,6 +99,20 @@ For animations, create `<edit>/animations/slot_<id>/` with `Bash` and spawn a su
 
    If anything fails: fix → re-render → re-eval. **Cap at 3 self-eval passes** — if issues remain after 3, flag them to the user rather than looping forever. Only present the preview once the self-eval passes.
 8. **Iterate + persist.** Natural-language feedback, re-plan, re-render. Never re-transcribe. Final render on confirmation. Append to `project.md`.
+
+## Review-first render ladder
+
+For any long-form or Shorts edit where final delivery may be 4K, always work in this order:
+
+1. Render a 720p review proof first.
+2. Give the user the proof and wait for their batched feedback.
+3. Do not rerender after each individual note while the user is still reviewing.
+4. Apply the full feedback batch to the 720p proof.
+5. Repeat 720p proof cycles until the user approves the cut.
+6. Render 4K only after the 720p proof is approved.
+7. For Shorts, render separate 720p vertical proof files first. Treat final Shorts exports as a separate post-approval step.
+
+If the user says they are still gathering edits, pause rendering and wait. Do not keep producing intermediate renders that will immediately be superseded.
 
 ## Cut craft (techniques)
 
@@ -318,5 +333,6 @@ Things that consistently fail regardless of style:
 - **Typing text centered on the partial string.** Text slides left as it grows.
 - **Sequential sub-agents for multiple animations.** Always parallel.
 - **Editing before confirming the strategy.** Never.
+- **Rerendering during live feedback collection.** If the user is still giving edits, wait for the batch. Do not keep rendering one-off proofs that will immediately be superseded.
 - **Re-transcribing cached sources.** Immutable outputs of immutable inputs.
 - **Assuming what kind of video it is.** Look first, ask second, edit last.
