@@ -32,6 +32,7 @@ These are the things where deviation produces silent failures or broken output. 
 11. **Strategy confirmation before execution.** Never touch the cut until the user has approved the plain-English plan.
 12. **All session outputs in `<videos_dir>/edit/`.** Never write inside the `video-use/` project directory.
 13. **720p proof before 4K final when review is expected.** For long-form edits and Shorts packages, use review proofs for feedback cycles and render final delivery files only after the proof is approved.
+14. **Scripted Shorts source matching.** If the source brief, Google Doc, cue sheet, or script contains dedicated Shorts scripts, match those exact opening lines against the transcript before rendering Shorts. Do not infer Shorts from long-form topic sections unless the transcript proves those sections are the actual Shorts takes.
 
 Everything else in this document is a worked example. Deviate whenever the material calls for it.
 
@@ -113,6 +114,27 @@ For any long-form or Shorts edit where final delivery may be 4K, always work in 
 7. For Shorts, render separate 720p vertical proof files first. Treat final Shorts exports as a separate post-approval step.
 
 If the user says they are still gathering edits, pause rendering and wait. Do not keep producing intermediate renders that will immediately be superseded.
+
+## Scripted Shorts packaging
+
+When a document contains explicit Shorts scripts, treat that document as the source of truth for Shorts packaging:
+
+1. Extract the first spoken line or first distinctive phrase from each Short.
+2. Search all available transcripts for those lines before choosing source ranges.
+3. If the lines are not present in the long-form transcript, look for another take or recording before rendering.
+4. Remove spoken slate labels such as "Short two" unless the user asks to keep them.
+5. Cut obvious false starts and duplicated restart words, but keep cuts snapped to word boundaries with normal padding.
+6. Put correct scripted Shorts in a clearly named folder. If an earlier proof set was rendered from the wrong source, keep it only if needed and label it as stale or wrong so it cannot be mistaken for the current set.
+
+## Final delivery and cleanup
+
+Before calling a video job delivered:
+
+1. Copy or upload only the approved final files: final long-form, final Shorts, and useful manifests or project notes.
+2. Verify the destination copy by file size or byte comparison when local, or by server-side file listing when remote.
+3. If delivering through Google Drive, return a real `https://drive.google.com/...` link, not a local Google Drive Desktop path under `~/Library/CloudStorage/...`.
+4. Verify Drive sharing permissions server-side if the user needs to share the folder.
+5. Move local working folders to Trash only after final delivery is verified. Do not empty Trash unless the user explicitly approves permanent deletion.
 
 ## Cut craft (techniques)
 
