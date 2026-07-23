@@ -136,6 +136,31 @@ Before calling a video job delivered:
 4. Verify Drive sharing permissions server-side if the user needs to share the folder.
 5. Move local working folders to Trash only after final delivery is verified. Do not empty Trash unless the user explicitly approves permanent deletion.
 
+### YouTube long-form delivery
+
+When the job ends in "upload it" / "publish it" / "put it on YouTube", read
+`references/youtube-delivery.md` and use `helpers/youtube_deliver.py`. The full
+template, UTM convention, chapter rules, and end-screen limitation live there.
+The load-bearing rules:
+
+- **Upload PRIVATE first, always.** Title, thumbnail, description tracking links,
+  and end screen all need decisions or the video id, which does not exist until
+  the file is up. Publishing is the user's call after they see it live.
+- **Never invent the title or any published metadata.** The title is the user's
+  own words from the script they read. If several are offered and unchosen, use
+  the one matching the script and say which.
+- **Complete the tracking after upload.** Every `mco_video_id` / `utm_content`
+  slot takes the real video id; the campaign is per-topic so videos roll up
+  separately (MON-285: CMM is the single attribution source via standard UTMs).
+- **Compute chapters from the cut**, never guess — `youtube_deliver.py chapters`
+  maps script-section source times through the kept ranges to output timestamps.
+- **The end screen cannot be set or verified via the API** — it is Studio-only.
+  Add the next video as the "Watch this next" text link, and surface the
+  end-screen card as a human step; do not claim it done.
+- **`describe` is dry-run then live**, with backup and auto-restore on failed
+  verification. Setting a private video's description is a draft edit, not a
+  live publish, but the publish itself stays a human decision.
+
 ## Cut craft (techniques)
 
 - **Audio-first.** Candidate cuts from word boundaries and silence gaps.
