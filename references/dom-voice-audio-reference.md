@@ -72,6 +72,18 @@ Third-octave, speech-gated (top 55% of frames by RMS), normalised so the
 | 12500 | -28.3 | -26.8 |
 | 16000 | -32.1 | -34.0 |
 
+## ASR is not a second opinion against Dom's own words
+
+Running the same ASR engine twice is not two independent checks — it's one
+opinion repeated, and it can be wrong in the same way both times. When a
+transcript disagrees with what Dom says he said about his own speech, his
+firsthand word wins; do not "verify" it by re-running the same model and
+reporting a match as if it settled the question. (2026-07-23: ElevenLabs Scribe
+heard "youthfulness" for "usefulness" — the /s/ fricative lives at 4–8kHz, the
+exact band Riverside strips — and running Scribe a second time on the restored
+audio still said "youthfulness". That was one engine twice, not proof; Dom's
+word was right.)
+
 ## What Riverside does to Dom's voice
 
 Riverside's noise suppression removes the top end. Against MYFB, a raw Riverside

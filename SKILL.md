@@ -33,6 +33,8 @@ These are the things where deviation produces silent failures or broken output. 
 12. **All session outputs in `<videos_dir>/edit/`.** Never write inside the `video-use/` project directory.
 13. **720p proof before 4K final when review is expected.** For long-form edits and Shorts packages, use review proofs for feedback cycles and render final delivery files only after the proof is approved.
 14. **Scripted Shorts source matching.** If the source brief, Google Doc, cue sheet, or script contains dedicated Shorts scripts, match those exact opening lines against the transcript before rendering Shorts. Do not infer Shorts from long-form topic sections unless the transcript proves those sections are the actual Shorts takes.
+15. **Clamp the pad against neighbouring words, then verify every cut edge lands in silence.** The end pad (Rule 7) must never reach past the next word's start, and the in pad never before the previous word's end. When the discarded take's next word starts only ~40ms after the kept word ends, a flat 80ms pad bleeds a fragment of the wrong take across the join — an audible jump. Compute the pad as `min(pad, next_word_start - guard)` / `max(pad, prev_word_end + guard)`, then run a check that asserts no segment edge falls inside a word before rendering. Silent failure otherwise. (2026-07-23: a flat pad bled the discarded "everybody" take across the "nobody" join at 12:11; a per-edge silence check found three bleeding edges the ear later caught.)
+16. **Audio judgement before the cut, when audio treatment is in question.** If the source needs an audio decision (Riverside cleanup, reference match, grade), render the full uncut audio options first and get the user's pick before proposing or building the cut. Do not lead with a cut-strategy proposal that assumes an audio treatment. (2026-07-23: Dom dismissed a cut-proposal question — "I thought the first task is for me to watch back the 720 with the right audio and then tell you whether it needs work.")
 
 Everything else in this document is a worked example. Deviate whenever the material calls for it.
 
@@ -235,7 +237,7 @@ Mental model is ASC CDL. Per channel: `out = (in * slope + offset) ** power`, th
 
 For anything else — portraiture, nature, product, music video, documentary — invent your own chain. `grade.py --filter '<raw ffmpeg>'` accepts any filter string.
 
-Hard rules: apply **per-segment during extraction** (not post-concat, which re-encodes twice). Never go aggressive without testing skin tones.
+Hard rules: apply **per-segment during extraction** (not post-concat, which re-encodes twice). Never go aggressive without testing skin tones. **When lifting an underexposed face, anchor the black point — a gamma lift alone raises the blacks too and the image goes milky/washed.** Use a curve that lifts the mids while holding the black point near zero, and measure the black point (1st-percentile luma) as well as the face, not just the midpoint. Perceived brightness comes from the range, not the midpoint. (2026-07-23: a gamma=1.9 lift took the face from luma 33→100 but the blacks from 7→45; Dom: "brighter but a little washed out." A curve holding black at 1 read brighter at face 85.) And know the ceiling: a badly underexposed source (this one was ~4 stops under) is a lighting problem at record time — a key light beats any grade and costs nothing in noise.
 
 ## Subtitles (when requested)
 
