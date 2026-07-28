@@ -1,37 +1,40 @@
 #!/usr/bin/env python3
-"""LTAS comparison: this week's raw Riverside audio vs Dom's audiobook narration.
+"""Long-term average spectrum comparison between a capture and a reference master.
 
-Measures the long-term average spectrum of both (speech-gated, level-normalised)
-and derives the corrective EQ that moves the Riverside capture toward the
-audiobook's spectral balance.
+Measures the LTAS of both (speech-gated, level-normalised) and derives the
+corrective EQ that moves the capture toward the reference's spectral balance.
+Useful when a recording should be made to sit like an existing, known-good
+master — an audiobook, a previous episode, a mix you already trust.
 
-Outputs a third-octave table, a PNG plot, and an ffmpeg filter chain.
+Outputs a third-octave table to stdout, plus `ltas_diff.npy` and
+`ltas_comparison.png` in the output directory.
+
+Usage:
+    python helpers/ltas_match.py --src capture.mp4 --ref reference.mp3
+    python helpers/ltas_match.py --src capture.mp4 --ref reference.mp3 \
+        --compare other-master.mp3 --ref-start 1800 --duration 600
+    python helpers/ltas_match.py --src capture.mp4 --ref reference.mp3 --out /path/to/edit
 """
-import subprocess, sys, os
+import argparse
+import os
+import subprocess
+import sys
+from pathlib import Path
+
 import numpy as np
 from scipy import signal
 
 SR = 48000
-OUT = os.path.dirname(os.path.abspath(__file__))
 
-SRC = os.path.expanduser("~/Movies/four-jobs-proofs/A-audio-AS-DOWNLOADED-720p.mp4")
-
-# Reference: Mind Your F**king Business audiobook. Dom's preferred master —
-# he rates the Plan B one as poor, so it is kept only as a comparison.
-REF = ("/Users/dominicmonkhouse/Library/CloudStorage/"
-       "GoogleDrive-dom@monkhouseandcompany.com/Shared drives/MONKHOUSE & COMPANY/"
-       "Audiobooks/Mind Your F**King Business/Mind Your Fking Business [Full].mp3")
-REF_START = 1800  # 30 min in, well clear of intro and credits
-
-REF_OLD = os.path.expanduser(
-    "~/Library/CloudStorage/GoogleDrive-dom@monkhouseandcompany.com/My Drive/"
-    "pat@monkhouseandcompany.com 2026-07-14T14:52:46.173Z/F**K Plan B Audiobook/4 - Part 1.mp3"
-)
+# Hard Rule 12: session outputs live in <videos_dir>/edit/, never inside the
+# skill directory. This file ships inside a three-machine git repo — writing
+# artefacts next to itself would commit render output to that repo.
+SKILL_DIR = Path(__file__).resolve().parent.parent
 
 
 def load(path, start, dur):
     """Decode a span to mono float32 at SR via ffmpeg."""
-    cmd = ["ffmpeg", "-v", "error", "-ss", str(start), "-t", str(dur), "-i", path,
+    cmd = ["ffmpeg", "-v", "error", "-ss", str(start), "-t", str(dur), "-i", str(path),
            "-vn", "-ac", "1", "-ar", str(SR), "-f", "f32le", "-"]
     raw = subprocess.run(cmd, capture_output=True, check=True).stdout
     return np.frombuffer(raw, dtype=np.float32)
@@ -68,13 +71,63 @@ def bands(f, db):
     return np.array(out)
 
 
-def main():
-    print("decoding source (Riverside, 600s of speech)...")
-    src = speech_gate(load(SRC, 100, 600))
-    print("decoding reference: Mind Your F**king Business (600s)...")
-    ref = speech_gate(load(REF, REF_START, 600))
-    print("decoding comparison: F**k Plan B (600s)...")
-    old = speech_gate(load(REF_OLD, 60, 600))
+def resolve_out_dir(args) -> Path:
+    """Default the output directory to the source's own `edit/` folder.
+
+    Never the script's directory — that is inside the skill repo (Hard Rule 12).
+    """
+    out = Path(args.out).expanduser().resolve() if args.out else (
+        Path(args.src).expanduser().resolve().parent / "edit"
+    )
+    if out == SKILL_DIR or SKILL_DIR in out.parents or out in SKILL_DIR.parents:
+        sys.exit(
+            f"refusing to write to {out}: session outputs must not land inside the "
+            f"video-use skill directory ({SKILL_DIR}). Pass --out <videos_dir>/edit."
+        )
+    out.mkdir(parents=True, exist_ok=True)
+    return out
+
+
+def label_for(path) -> str:
+    return Path(path).stem[:9]
+
+
+def parse_args(argv=None):
+    ap = argparse.ArgumentParser(
+        description="Compare the long-term average spectrum of a capture against a reference master."
+    )
+    ap.add_argument("--src", required=True,
+                    help="Capture to correct (any file ffmpeg can decode)")
+    ap.add_argument("--ref", required=True,
+                    help="Reference master to match toward")
+    ap.add_argument("--compare", default=None,
+                    help="Optional third file, shown alongside for context only")
+    ap.add_argument("--out", default=None,
+                    help="Output directory. Default: <src's folder>/edit")
+    ap.add_argument("--src-start", type=float, default=100.0,
+                    help="Seconds into --src to start analysing (default 100)")
+    ap.add_argument("--ref-start", type=float, default=1800.0,
+                    help="Seconds into --ref to start analysing (default 1800, "
+                         "well clear of intros and credits)")
+    ap.add_argument("--compare-start", type=float, default=60.0,
+                    help="Seconds into --compare to start analysing (default 60)")
+    ap.add_argument("--duration", type=float, default=600.0,
+                    help="Seconds of audio to analyse from each file (default 600)")
+    return ap.parse_args(argv)
+
+
+def main(argv=None):
+    args = parse_args(argv)
+    out_dir = resolve_out_dir(args)
+
+    print(f"decoding source: {Path(args.src).name} ({args.duration:.0f}s)...")
+    src = speech_gate(load(args.src, args.src_start, args.duration))
+    print(f"decoding reference: {Path(args.ref).name} ({args.duration:.0f}s)...")
+    ref = speech_gate(load(args.ref, args.ref_start, args.duration))
+    old = None
+    if args.compare:
+        print(f"decoding comparison: {Path(args.compare).name} ({args.duration:.0f}s)...")
+        old = speech_gate(load(args.compare, args.compare_start, args.duration))
 
     norm = (CENTRES >= 200) & (CENTRES <= 2000)
 
@@ -83,48 +136,65 @@ def main():
         b = bands(f, d)
         return b - np.nanmean(b[norm])
 
-    bs_n, br_n, bo_n = prof(src), prof(ref), prof(old)
-    diff = br_n - bs_n  # dB to ADD to source to match the MYFB reference
+    bs_n, br_n = prof(src), prof(ref)
+    bo_n = prof(old) if old is not None else None
+    diff = br_n - bs_n  # dB to ADD to source to match the reference
 
-    print("\n%-9s %10s %8s %8s %9s" % ("Hz", "riverside", "MYFB", "PlanB", "diff→MYFB"))
-    print("-" * 50)
-    for c, a, b, o, d in zip(CENTRES, bs_n, br_n, bo_n, diff):
-        flag = ""
-        if abs(d) >= 3:
-            flag = "  <<<" if d > 0 else "  >>>"
-        print("%-9.0f %10.1f %8.1f %8.1f %+9.1f%s" % (c, a, b, o, d, flag))
+    src_l, ref_l = label_for(args.src), label_for(args.ref)
+    cmp_l = label_for(args.compare) if args.compare else ""
+
+    if bo_n is None:
+        print("\n%-9s %10s %10s %9s" % ("Hz", src_l, ref_l, "diff→ref"))
+        print("-" * 42)
+        for c, a, b, d in zip(CENTRES, bs_n, br_n, diff):
+            flag = ("  <<<" if d > 0 else "  >>>") if abs(d) >= 3 else ""
+            print("%-9.0f %10.1f %10.1f %+9.1f%s" % (c, a, b, d, flag))
+    else:
+        print("\n%-9s %10s %10s %10s %9s" % ("Hz", src_l, ref_l, cmp_l, "diff→ref"))
+        print("-" * 53)
+        for c, a, b, o, d in zip(CENTRES, bs_n, br_n, bo_n, diff):
+            flag = ("  <<<" if d > 0 else "  >>>") if abs(d) >= 3 else ""
+            print("%-9.0f %10.1f %10.1f %10.1f %+9.1f%s" % (c, a, b, o, d, flag))
 
     aud = (CENTRES >= 80) & (CENTRES <= 12500)
-    print("\nHow different are the two audiobook masters from each other?")
-    print("  mean abs difference, 80Hz-12.5kHz: %.2f dB"
-          % np.nanmean(np.abs(br_n - bo_n)[aud]))
+    if bo_n is not None:
+        print("\nHow different are the two references from each other?")
+        print("  mean abs difference, 80Hz-12.5kHz: %.2f dB"
+              % np.nanmean(np.abs(br_n - bo_n)[aud]))
 
-    np.save(os.path.join(OUT, "ltas_diff.npy"), np.vstack([CENTRES, bs_n, br_n, diff]))
+    npy_path = os.path.join(out_dir, "ltas_diff.npy")
+    np.save(npy_path, np.vstack([CENTRES, bs_n, br_n, diff]))
+    print("\ndata: %s" % npy_path)
 
-    try:
-        import matplotlib
-        matplotlib.use("Agg")
-        import matplotlib.pyplot as plt
-        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(11, 8), sharex=True)
-        ax1.semilogx(CENTRES, bs_n, "o-", label="Riverside (this week, raw)", lw=2)
-        ax1.semilogx(CENTRES, br_n, "s-", label="Audiobook narration (reference)", lw=2)
-        ax1.set_ylabel("Level (dB, normalised 200Hz-2kHz)")
-        ax1.legend(); ax1.grid(True, which="both", alpha=0.3)
-        ax1.set_title("Long-term average spectrum: Riverside capture vs audiobook reference")
-        ax2.semilogx(CENTRES, diff, "o-", color="crimson", lw=2)
-        ax2.axhline(0, color="k", lw=0.8)
-        ax2.fill_between(CENTRES, -1.5, 1.5, alpha=0.15, color="green")
-        ax2.set_ylabel("Correction needed (dB)"); ax2.set_xlabel("Frequency (Hz)")
-        ax2.grid(True, which="both", alpha=0.3)
-        for ax in (ax1, ax2):
-            ax.set_xticks([50, 100, 200, 500, 1000, 2000, 5000, 10000, 16000])
-            ax.set_xticklabels(["50", "100", "200", "500", "1k", "2k", "5k", "10k", "16k"])
-        plt.tight_layout()
-        p = os.path.join(OUT, "ltas_comparison.png")
-        plt.savefig(p, dpi=110)
-        print("\nplot: %s" % p)
-    except ImportError:
-        print("\n(matplotlib unavailable - table only)")
+    # matplotlib is a declared dependency. Do NOT swallow ImportError here — a
+    # missing plot would look like a successful table-only run when the real
+    # problem is a broken environment.
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(11, 8), sharex=True)
+    ax1.semilogx(CENTRES, bs_n, "o-", label=f"{src_l} (capture)", lw=2)
+    ax1.semilogx(CENTRES, br_n, "s-", label=f"{ref_l} (reference)", lw=2)
+    if bo_n is not None:
+        ax1.semilogx(CENTRES, bo_n, "^-", label=f"{cmp_l} (comparison)", lw=1.5, alpha=0.7)
+    ax1.set_ylabel("Level (dB, normalised 200Hz-2kHz)")
+    ax1.legend()
+    ax1.grid(True, which="both", alpha=0.3)
+    ax1.set_title("Long-term average spectrum: capture vs reference")
+    ax2.semilogx(CENTRES, diff, "o-", color="crimson", lw=2)
+    ax2.axhline(0, color="k", lw=0.8)
+    ax2.fill_between(CENTRES, -1.5, 1.5, alpha=0.15, color="green")
+    ax2.set_ylabel("Correction needed (dB)")
+    ax2.set_xlabel("Frequency (Hz)")
+    ax2.grid(True, which="both", alpha=0.3)
+    for ax in (ax1, ax2):
+        ax.set_xticks([50, 100, 200, 500, 1000, 2000, 5000, 10000, 16000])
+        ax.set_xticklabels(["50", "100", "200", "500", "1k", "2k", "5k", "10k", "16k"])
+    plt.tight_layout()
+    png_path = os.path.join(out_dir, "ltas_comparison.png")
+    plt.savefig(png_path, dpi=110)
+    print("plot: %s" % png_path)
 
 
 if __name__ == "__main__":

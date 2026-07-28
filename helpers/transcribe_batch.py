@@ -20,7 +20,10 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-from transcribe import load_api_key, transcribe_one
+# `transcribe` is a sibling module in this directory, not an installed package.
+# Resolve it from this file's own directory so the import works from any CWD.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from transcribe import load_api_key, transcribe_one  # noqa: E402
 
 
 VIDEO_EXTS = {".mp4", ".MP4", ".mov", ".MOV", ".mkv", ".MKV", ".avi", ".AVI", ".m4v"}

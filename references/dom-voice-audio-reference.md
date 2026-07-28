@@ -131,6 +131,15 @@ third-octave table plus the correction needed. `helpers/verify_ltas.py` scores
 candidate renders against the reference and reports mean absolute deviation, so
 a chain can be checked rather than guessed. Both need numpy + scipy.
 
+Both take their paths as arguments — nothing is hardcoded, and `ltas_match.py`
+writes `ltas_diff.npy` + `ltas_comparison.png` to `<videos_dir>/edit/` by
+default (override with `--out`). It refuses to write inside the skill directory.
+
+```bash
+python helpers/ltas_match.py --src <capture> --ref "<MYFB path above>"
+python helpers/verify_ltas.py --ref "<MYFB path above>" --src <A.mp4> --src <B.mp4>
+```
+
 Method: decode 600s of each to mono 48kHz, gate to the top 55% of frames by RMS
 (keeps speech, drops room tone), Welch PSD, average into third-octave bands,
 normalise on 200Hz–2kHz.

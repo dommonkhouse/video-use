@@ -12,11 +12,17 @@ Optionally builds a master SRT from the per-source transcripts + EDL
 output-timeline offsets, applies the proven force_style (2-word
 UPPERCASE chunks, Helvetica 18 Bold, MarginV=35).
 
+Output names default to `<project>_<mode>_<YYYY-MM-DD_HH-MM-SS>.mp4` in the edit
+directory, e.g. `four-jobs_final_2026-07-28_14-32-05.mp4`. `<project>` comes from
+the EDL's optional `name` field, falling back to the footage folder's name.
+`-o` overrides the whole thing.
+
 Usage:
-    python helpers/render.py <edl.json> -o final.mp4
-    python helpers/render.py <edl.json> -o preview.mp4 --preview
-    python helpers/render.py <edl.json> -o final.mp4 --build-subtitles
-    python helpers/render.py <edl.json> -o final.mp4 --no-subtitles
+    python helpers/render.py <edl.json>
+    python helpers/render.py <edl.json> --preview
+    python helpers/render.py <edl.json> -o /some/explicit/name.mp4
+    python helpers/render.py <edl.json> --build-subtitles
+    python helpers/render.py <edl.json> --no-subtitles
 """
 
 from __future__ import annotations
@@ -26,16 +32,17 @@ import json
 import re
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 
-try:
-    from grade import get_preset, auto_grade_for_clip  # same directory
-except Exception:
-    def get_preset(name: str) -> str:
-        return ""
-
-    def auto_grade_for_clip(video, start=0.0, duration=None, verbose=False):  # type: ignore
-        return "eq=contrast=1.03:saturation=0.98", {}
+# `grade` is a sibling module in this directory, not an installed package, so a
+# bare `from grade import ...` only resolves when the CWD happens to be helpers/.
+# Put this file's own directory on sys.path so it resolves from anywhere — and
+# do NOT wrap it in try/except. A fallback here is worse than a crash: it would
+# silently replace every colour grade with a hardcoded default while `--help`,
+# the render, and every other check still pass.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from grade import get_preset, auto_grade_for_clip  # noqa: E402
 
 
 # -------- Subtitle style (bold-overlay, proven at 1920×1080 and 1080×1920) --
@@ -82,6 +89,40 @@ def resolve_grade_filter(grade_field: str | None) -> str:
             print(f"warning: unknown preset '{grade_field}', using as raw filter")
             return grade_field
     return grade_field
+
+
+# -------- Output naming ------------------------------------------------------
+#
+# `final.mp4` / `preview.mp4` in every project directory is unreadable once more
+# than one job is on disk — you cannot tell a 720p proof from a 4K delivery, or
+# last week's cut from this morning's, without checking file dates. Default to
+# `<project>_<mode>_<timestamp>.mp4` instead. `-o` still wins.
+
+
+def slugify(text: str) -> str:
+    """Lowercase, non-alphanumerics collapsed to single hyphens."""
+    s = re.sub(r"[^a-zA-Z0-9]+", "-", text).strip("-").lower()
+    return s or "video"
+
+
+def project_slug(edl: dict, edit_dir: Path) -> str:
+    """Project name for the output filename.
+
+    Order: the EDL's own `name` field, then the footage folder (the parent of
+    `edit/`), then the edit directory itself if it is not called `edit`.
+    """
+    named = (edl.get("name") or "").strip()
+    if named:
+        return slugify(named)
+    if edit_dir.name.lower() == "edit":
+        return slugify(edit_dir.parent.name)
+    return slugify(edit_dir.name)
+
+
+def default_output_path(edl: dict, edit_dir: Path, mode: str) -> Path:
+    """`<edit_dir>/<project>_<mode>_<YYYY-MM-DD_HH-MM-SS>.mp4`."""
+    stamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    return edit_dir / f"{project_slug(edl, edit_dir)}_{mode}_{stamp}.mp4"
 
 
 def resolve_path(maybe_path: str, base: Path) -> Path:
@@ -575,7 +616,10 @@ def build_final_composite(
 def main() -> None:
     ap = argparse.ArgumentParser(description="Render a video from an EDL")
     ap.add_argument("edl", type=Path, help="Path to edl.json")
-    ap.add_argument("-o", "--output", type=Path, required=True, help="Output video path")
+    ap.add_argument(
+        "-o", "--output", type=Path, default=None,
+        help="Output video path. Default: <edit_dir>/<project>_<mode>_<timestamp>.mp4",
+    )
     ap.add_argument(
         "--preview",
         action="store_true",
@@ -609,7 +653,12 @@ def main() -> None:
 
     edl = json.loads(edl_path.read_text())
     edit_dir = edl_path.parent
-    out_path = args.output.resolve()
+    mode = "draft" if args.draft else ("preview" if args.preview else "final")
+    if args.output is None:
+        out_path = default_output_path(edl, edit_dir, mode)
+        print(f"output name (no -o given): {out_path.name}")
+    else:
+        out_path = args.output.resolve()
 
     # 1. Extract per-segment (auto-grade per range if EDL grade is "auto")
     segment_paths = extract_all_segments(

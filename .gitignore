@@ -58,3 +58,8 @@ master.srt
 takes_packed.md
 edl.json
 project.md
+*.npy
+ltas_comparison.png
+
+# Code index, machine-local
+.codegraph/

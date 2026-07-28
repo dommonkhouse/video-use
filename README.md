@@ -6,7 +6,7 @@
 
 Introducing **video-use** — edit videos with Claude Code. 100% open source.
 
-Drop raw footage in a folder, chat with Claude Code, get `final.mp4` back. Works for any content — talking heads, montages, tutorials, travel, interviews — without presets or menus.
+Drop raw footage in a folder, chat with Claude Code, get a finished cut back. Works for any content — talking heads, montages, tutorials, travel, interviews — without presets or menus.
 
 Try video-use in [Browser Use Cloud](https://cloud.browser-use.com/v4?utm_campaign=video-use-use-in-cloud&utm_source=github).
 
@@ -45,7 +45,7 @@ And in the session:
 
 > edit these into a launch video
 
-It inventories the sources, proposes a strategy, waits for your OK, then produces `edit/final.mp4` next to your sources. All outputs live in `<videos_dir>/edit/` — the skill directory stays clean.
+It inventories the sources, proposes a strategy, waits for your OK, then produces `edit/<project>_final_<timestamp>.mp4` next to your sources. All outputs live in `<videos_dir>/edit/` — the skill directory stays clean.
 
 ## Manual install
 

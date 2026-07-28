@@ -57,15 +57,23 @@ The skill lives in `video-use/`. User footage lives wherever they put it. All se
     ├── master.srt               ← output-timeline subtitles
     ├── downloads/               ← yt-dlp outputs
     ├── verify/                  ← debug frames / timeline PNGs
-    ├── preview.mp4
-    └── final.mp4
+    ├── base.mp4                 ← intermediate concat, pre-overlay
+    └── <project>_<mode>_<YYYY-MM-DD_HH-MM-SS>.mp4
 ```
+
+Rendered outputs are named `<project>_<mode>_<timestamp>.mp4` — e.g.
+`four-jobs_final_2026-07-28_14-32-05.mp4`. `<project>` comes from the EDL's
+optional `name` field, falling back to the footage folder's own name; `<mode>`
+is `final`, `preview`, or `draft`. Generic `final.mp4` names are unusable once
+more than one job is on disk: you cannot tell a 720p proof from a 4K delivery,
+or last week's cut from this morning's. Pass `-o` when the user wants a specific
+filename (a delivery name, an upload name) — it overrides the default entirely.
 
 ## Setup
 
 First-time install lives in `install.md` (clone, deps, ffmpeg, skill registration, API key). Don't re-run it every session; on cold start just verify:
 
-- `ELEVENLABS_API_KEY` resolves — either in the environment or in `.env` at the video-use repo root. If missing, ask the user to paste one and write it to `.env` (never to the user's `<videos_dir>`).
+- `ELEVENLABS_API_KEY` resolves. `helpers/transcribe.py` reads exactly three sources, in order: `.env` at the skill root, `.env` in the current directory, then the process environment. On Dom's machines the key lives in `~/.secrets/mcp.env`, which `~/.zshenv` sources into every shell — so the environment path already covers it and no `.env` file is needed. Check without printing it: `[ -n "$ELEVENLABS_API_KEY" ] && echo present`. If it is genuinely missing, ask the user to paste one and write it to `.env` at the skill root (never to the user's `<videos_dir>`, and never echo the value).
 - `ffmpeg` + `ffprobe` on PATH.
 - Python deps installed (`uv sync` or `pip install -e .` inside the repo).
 - Node.js + npm available if the session needs HyperFrames or Remotion slots. HyperFrames currently requires Node.js 22+.
@@ -81,8 +89,10 @@ Helpers (`helpers/transcribe.py`, `helpers/render.py`, etc.) live alongside this
 - **`transcribe_batch.py <videos_dir>`** — 4-worker parallel transcription. Use for multi-take.
 - **`pack_transcripts.py --edit-dir <dir>`** — `transcripts/*.json` → `takes_packed.md` (phrase-level, break on silence ≥ 0.5s).
 - **`timeline_view.py <video> <start> <end>`** — filmstrip + waveform PNG. On-demand visual drill-down. **Not a scan tool** — use it at decision points, not constantly.
-- **`render.py <edl.json> -o <out>`** — per-segment extract → concat → overlays (PTS-shifted) → subtitles LAST. `--preview` for 720p fast. `--build-subtitles` to generate master.srt inline.
+- **`render.py <edl.json>`** — per-segment extract → concat → overlays (PTS-shifted) → subtitles LAST. Names the output `<project>_<mode>_<timestamp>.mp4` in the edit dir; `-o <path>` overrides. `--preview` and `--draft` for faster proofs. `--build-subtitles` to generate master.srt inline.
 - **`grade.py <in> -o <out>`** — ffmpeg filter chain grade. Presets + `--filter '<raw>'` for custom.
+- **`ltas_match.py --src <capture> --ref <master>`** — third-octave spectrum comparison and the corrective EQ to match a reference master. `--out` defaults to `<videos_dir>/edit/`.
+- **`verify_ltas.py --ref <master> --src <a> --src <b>`** — scores candidate renders against that reference; smallest deviation wins.
 
 For animations, create `<edit>/animations/slot_<id>/` with `Bash` and spawn a sub-agent via the `Agent` tool.
 
