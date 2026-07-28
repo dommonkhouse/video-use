@@ -113,6 +113,9 @@ For any long-form or Shorts edit where final delivery may be 4K, always work in 
 2. Give the user the proof and wait for their batched feedback.
 3. Do not rerender after each individual note while the user is still reviewing.
 4. Apply the full feedback batch to the 720p proof.
+   If the review covers a package of several outputs and the user gives an
+   unscoped craft note such as tighter pauses, treat it as package-wide: audit
+   and apply it across every output unless they explicitly name one item.
 5. Repeat 720p proof cycles until the user approves the cut.
 6. Render 4K only after the 720p proof is approved.
 7. For Shorts, render separate 720p vertical proof files first. Treat final Shorts exports as a separate post-approval step.
